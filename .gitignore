@@ -1,0 +1,17 @@
+.DS_Store
+.ipynb_checkpoints/
+
+GALEX_cutouts/
+GZ_DECaLS/
+Tractor_LSBG/
+cutouts/
+petrofit/
+post_cutouts/
+sep/
+statmorph-lsst/
+statmorph/
+
+*.pdf
+*.txt
+*.csv
+*.fits
