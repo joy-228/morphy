@@ -1,0 +1,19 @@
+font.size: 26.0
+font.family: serif
+
+axes.linewidth: 2
+lines.markersize : 14
+
+xtick.major.size: 10
+xtick.minor.size: 3
+ytick.major.size: 10
+ytick.minor.size: 3
+xtick.direction: in
+ytick.direction: in
+xtick.labelsize : 24
+ytick.labelsize : 24
+
+legend.frameon: True
+mathtext.default: rm
+mathtext.fontset: cm
+
