@@ -12,35 +12,7 @@ import argparse
 import csv
 from astropy.cosmology import FlatLambdaCDM
 cosmo = FlatLambdaCDM(H0=70, Om0=0.27)
-
-
-def read_sources(filename,Nsamp=0):
-    data = np.genfromtxt(filename, delimiter=',',skip_header=True)
-
-    if Nsamp>0: data = data[npr.choice(len(data), Nsamp)]
-    return data
-
-def request_apply(url,filename,out_dir):
-    if not os.path.exists(out_dir+filename):
-                print(url)
-                print('downloading -- ', filename) 
-
-                response = requests.get(url)
-                
-                if response.status_code == 200:
-                    with open(out_dir+filename, 'wb') as file:
-                        file.write(response.content)
-
-
-def download_cutout(sample,  filters='griz',size=128,out_dir='cutouts/'):
-    # will download the files from NERSC into the work_dir folder
-
-    for j in range(len(sample)):
-        ra,dec = sample[j,0],sample[j,1]
-        filename = 'cutout_{:.4f}_{:.4f}.fits'.format(ra,dec)
-        url = ('https://www.legacysurvey.org/viewer/fits-cutout?ra={:.4f}&dec={:.4f}&size='+str(size)+'&layer=ls-dr10-south&invvar&pixscale=0.262&bands='+filters).format(ra,dec)
-
-        request_apply(url,filename,out_dir)        
+       
 
 
 def load_mask(brickname):
