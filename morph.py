@@ -1,6 +1,6 @@
 import numpy as np
 import os
-import re
+import requests
 import numpy.random as npr
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -50,53 +50,62 @@ def request_apply(url,filename,out_dir):
                         file.write(response.content)
 
 
-def download_cutout(sample,  filters='griz',size=npix,out_dir='cutouts/'):
-    # will download the files from NERSC into the work_dir folder
+def download_cutout(sample, size=npix,out_dir='cutouts/'):
 
     for j in range(len(sample)):
         ra,dec = sample[j,0],sample[j,1]
         filename = 'cutout_{:.4f}_{:.4f}.fits'.format(ra,dec)
-        url = ('https://www.legacysurvey.org/viewer/fits-cutout?ra={:.4f}&dec={:.4f}&size='+str(size)+'&layer=ls-dr10-south&invvar&pixscale=0.262&bands='+filters).format(ra,dec)
 
+        if dec<32.375:
+            url = ('https://www.legacysurvey.org/viewer/fits-cutout?ra={:.4f}&dec={:.4f}&size='+str(size)+'&layer=ls-dr10-south&invvar&pixscale=0.262&bands=griz').format(ra,dec)
+        else:
+            url = ('https://www.legacysurvey.org/viewer/fits-cutout?ra={:.4f}&dec={:.4f}&size='+str(size)+'&layer=ls-dr9-north&invvar&pixscale=0.262&bands=grz').format(ra,dec)
+        
         request_apply(url,filename,out_dir) 
 
-def rgb_cutout(img_dat):
+
+def rgb_cutout(img_data):
     imax = 0
-    for img in img_dat[::-1]:
+    for img in img_data[::-1]:
         val = np.percentile(img,99.5)
         if val > imax: imax = val
     
     clip_intvls = 3*[ManualInterval(vmin=0, vmax=imax)]
     clip_intvls[2] = ManualInterval(vmin=0, vmax=2*imax)
     
-    return make_rgb(img_dat[2],img_dat[1],img_dat[0],interval=clip_intvls,stretch=LogStretch(a=5))
+    return make_rgb(img_data[2],img_data[1],img_data[0],interval=clip_intvls,stretch=LogStretch(a=20))
 
 def image_bkg(img_dat):
     img_sub,img_rms = np.zeros((4,npix,npix)),np.zeros((4,npix,npix))
     glob_rms = np.zeros(4)
+    flags=[False]*4 
 
-    img_arr,img_hdr,img_invvar = img_dat[0].data,img_dat[0].header,img_dat[1].data
+    img_arr = img_dat[0].data
+    img_hdr = img_dat[0].header
+    img_invvar = img_dat[1].data
 
     w = wcs.WCS(img_hdr,naxis=2)
 
-    flags=[False]*4 
-   
-    for i,key in enumerate(bands):        
-        threshold = detect_threshold(img_arr[i,:,:], nsigma=1.0)
-        segment_img = detect_sources(img_arr[i,:,:], threshold, npixels=10,connectivity=8)
+    if np.shape(img_arr)[0]==4: ixr,ir=range(4),range(4)
+    else: 
+        flags[2] = True
+        ixr,ir=range(3),[0,1,3]
+        
+    for i,ix in zip(ir,ixr):    
+        threshold = detect_threshold(img_arr[ix,:,:], nsigma=1.0)
+        segment_img = detect_sources(img_arr[ix,:,:], threshold, npixels=10,connectivity=8)
 
         try: mask = segment_img.make_source_mask(size=2)
         except: 
             flags[i]=True
             continue
         
-        var = np.reciprocal(img_invvar[i,:,:])
-        bkg = Background2D(img_arr[i,:,:].astype(img_arr[i,:,:].dtype.newbyteorder('=')), ( 32, 32), filter_size=(5,5), mask=mask)
+        var = np.reciprocal(img_invvar[ix,:,:])
+        bkg = Background2D(img_arr[ix,:,:].astype(img_arr[ix,:,:].dtype.newbyteorder('=')), ( 32, 32), filter_size=(5,5), mask=mask)
 
         if np.mean(var)>100 or np.any(var<0): flags[i]=True
-        #print(key+' Background:',bkg.background_median,key+' RMS^2:',np.square(bkg.background_rms_median),key+' Var:',np.mean(var))
 
-        img_sub[i] = img_arr[i,:,:]-np.abs(bkg.background)
+        img_sub[i] = img_arr[ix,:,:]-np.abs(bkg.background)
         img_rms[i] = np.sqrt(var)
         glob_rms[i] = bkg.background_median
 
@@ -107,25 +116,25 @@ def image_segmap(img_dat,img_rms,psf_mod,wc,flags):
         segmaps_lo,segmaps_hi = np.zeros((4,npix,npix)),np.zeros((4,npix,npix))
         imzer = np.zeros((npix,npix))
    
-        for ii,key in enumerate(bands):        
-                if flags[ii]==True: continue
-                convolved_data = convolve(img_dat[ii], psf_mod)
+        for iz,key in enumerate(bands):        
+                if flags[iz]==True: continue
+                convolved_data = convolve(img_dat[iz], psf_mod)
 
                 finder = SourceFinder(npixels=10, nlevels=32, contrast=0.0005, progress_bar=False)
-                segment_map = finder(convolved_data, img_rms[ii])
+                segment_map = finder(convolved_data, img_rms[iz])
 
                 if segment_map==None: 
-                    flags[jj]=True
+                    flags[iz]=True
                     continue
         
-                cat = SourceCatalog(img_dat[ii], segment_map, convolved_data=convolved_data)
+                cat = SourceCatalog(img_dat[iz], segment_map, convolved_data=convolved_data)
                 tbl = cat.to_table()                    
                     
                 target = np.argmin(np.sqrt((tbl['xcentroid']-wc[0])**2+(tbl['ycentroid']-wc[1])**2))
-                segmaps_lo[ii] = (1*(segment_map==(target+1)))
-                segmaps_hi[ii] = (1*((segment_map!=imzer)&(segment_map!=(target+1))))
+                segmaps_lo[iz] = (1*(segment_map==(target+1)))
+                segmaps_hi[iz] = (1*((segment_map!=imzer)&(segment_map!=(target+1))))
                 '''
-                flux_arr, area_arr, error_arr = ptf.source_photometry(cat[target], img_dat[jj], segment_map, r_list, error=img_rms[jj],bg_sub=False, plot=False)
+                flux_arr, area_arr, error_arr = ptf.source_photometry(cat[target], img_dat[iz], segment_map, r_list, error=img_rms[iz],bg_sub=False, plot=False)
                 petr = ptf.Petrosian(r_list, area_arr, flux_arr, flux_err=error_arr)
                 print("{:0.4f} ± {:0.4f} pix".format(petr.r_petrosian, petr.r_petrosian_err))
                 '''
@@ -140,8 +149,7 @@ def image_segmap(img_dat,img_rms,psf_mod,wc,flags):
 
 def plot_cutout(img_dat,comp_segmap,pos,w,ptr,df_row):
         fig,ax=plt.subplots(figsize=(16,8))
-        rgb_img = rgb_cutout(img_dat)
-        img_copy = [img_dat[k].copy() for k in range(3)]
+        img_copy = [img_dat[k].copy() for k in [0,1,3]]
         ax.imshow(rgb_cutout(img_copy), origin='lower',extent=[pos[0]-16.506,pos[0]+16.506, pos[1]-16.506, pos[1]+16.506])
 
         for k in range(3): np.putmask(img_copy[k],~(comp_segmap.astype('bool')),0)
@@ -161,7 +169,7 @@ def plot_cutout(img_dat,comp_segmap,pos,w,ptr,df_row):
         ax.set_ylabel(r'$DEC \ (deg)$',fontsize=40)
 
         plt.savefig('post_cutouts/galseg_{:.4f}_{:.4f}.png'.format(pos[0],pos[1]),bbox_inches='tight')
-        #plt.show()
+        plt.close(fig)
 
 def gaussian_2d(x, y, x0=0.0, y0=0.0, sigma=1.0): return np.exp(-((x - x0)**2 + (y - y0)**2)/(2*sigma**2))
 
@@ -188,16 +196,15 @@ def morph_main(sources,inds=None):
     t1 = time.time()
     
     for ii,key in sources.iterrows():
-            if ii<1200 or ii>1300: continue
+            #if ii<2090: continue
             pos = np.array([key['ra'],key['dec']])
-            print(ii,'RA:',pos[0],'DEC:',pos[1],'z:',key['zspec'],'logM:',key['logM'])
+            print(ii,'time;',time.time()-t1,'ind:',key['ind'],',RA:',pos[0],',DEC:',pos[1])
             
             download_cutout(pos.reshape(1,2))
             filename = 'cutout_{:.4f}_{:.4f}.fits'.format(pos[0],pos[1])
-            #print(filename)
             try: data = fits.open("cutouts/"+filename)
             except: continue
-    
+   
             img_data,img_hdr,img_rms,glob_rms,flags = image_bkg(data)
             if (flags[0] or flags[1]): continue
     
@@ -226,14 +233,15 @@ def morph_main(sources,inds=None):
     
             plot_cutout(img_data,comp_segmap,pos,w,morph_arr[0,10:15],key)
     
-            morph_row = [ii]
+            morph_row = [key['ind'],ii]
             morph_row.extend(morph_arr.ravel())
             morph_all.append(morph_row)
-    
+
     t2= time.time()
-    print(t2-t1)
+    print('Total time taken:',t2-t1)
 
     return morph_all
+    
 
 if __name__ == '__main__':
     v1saga = pd.read_csv('v1saga_dwarfs.csv')
@@ -242,13 +250,13 @@ if __name__ == '__main__':
     morph_all = morph_main(v1saga)
 
     param_names = ['gini','m20','c','a','s','a_s','flag','snr_pix','r20_psf','segm_petr','xc_as','yc_as','rpetro','orien_as','ellip_as','n','rhalf','ellip_ss','flag_ss']
-    col_names = ['ind']
+    col_names = ['ind0','ind1']
     for b in bands: col_names.extend([x+'_'+b for x in param_names])
     
     smorph = pd.DataFrame(morph_all, columns=col_names)
     smorph.to_csv('saga_morph.csv', index=False)
     print(smorph.shape)
-
+    
     fig,ax=plt.subplots(1,5,figsize=(30,8),sharey=True)
 
     for i,key in enumerate(bands):
@@ -259,5 +267,4 @@ if __name__ == '__main__':
             ax[j].hist(smorph[param_names[j]+'_'+key][high_snr],bins=21,alpha=0.25,color=bands[key]) 
     plt.subplots_adjust(wspace=0.0)
     plt.show()
-    
         
