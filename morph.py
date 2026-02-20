@@ -271,7 +271,7 @@ def image_segmap(img_dat, img_rms, psf_mod, wc, flags):
         # Convolve with PSF model for source detection
         convolved_data = convolve(img_dat[iz], psf_mod)
 
-        # Create segmentation map
+        # Create segmentation map with sources above 1sigma threshold
         finder = SourceFinder(npixels=10, nlevels=32, contrast=0.0005, progress_bar=False)
         segment_map = finder(convolved_data, img_rms[iz])
 

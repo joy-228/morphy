@@ -53,15 +53,15 @@ def hist_2d_marg_axes(Xlabel,Ylabel,XYext):
 
         return fig
 
-def marg_hist_1d(AXIS,W,Wext,LAYER,ORIEN='horizontal'):
+def marg_hist_1d(AXIS,W,Wext,ORIEN='horizontal',COL='black'):
         Wbins1 = np.linspace(Wext[0],Wext[1],40)
         kde_1D = KernelDensity(kernel='gaussian', bandwidth=0.1*(Wext[1]-Wext[0])).fit(W.values[:, np.newaxis])
         Wkde_1D = np.exp(kde_1D.score_samples(Wbins1[:, np.newaxis]))
         if ORIEN=='horizontal': 
-            AXIS.plot(Wbins1,Wkde_1D/np.sum(Wkde_1D),color='black',lw=3,alpha=max(0.4,LAYER))
+            AXIS.plot(Wbins1,Wkde_1D/np.sum(Wkde_1D),color=COL,lw=3,alpha=0.4)
             AXIS.tick_params(axis='y', labelleft=False)
         elif ORIEN=='vertical': 
-            AXIS.plot(Wkde_1D/np.sum(Wkde_1D),Wbins1,color='black',lw=3,alpha=max(0.4,LAYER))
+            AXIS.plot(Wkde_1D/np.sum(Wkde_1D),Wbins1,color=COL,lw=3,alpha=0.4)
             AXIS.tick_params(axis='x', labelbottom=False)
 
     
@@ -76,8 +76,8 @@ def cmap_hists(FIG,X,Y,LAYER,XYext,Xlabel,Ylabel,CMAP,Z=None,Zext=None,Zlabel=No
         ret = sts.binned_statistic_2d(Xval, Yval, Z, statistic='median', bins=[UV,UV])
         im = ax[0].imshow(np.transpose(ret.statistic),cmap=CMAP,aspect='auto',extent =XYext,origin='lower',interpolation='gaussian',vmin=Zext[0],vmax=Zext[1],alpha=max(0.2,LAYER))
 
-        marg_hist_1d(ax[1],X,XYext[:2],LAYER)
-        marg_hist_1d(ax[2],Y,XYext[2:],LAYER,ORIEN='vertical')
+        marg_hist_1d(ax[1],X,XYext[:2])
+        marg_hist_1d(ax[2],Y,XYext[2:],ORIEN='vertical')
 
         if LAYER>0:
             H = hess_arr(X, Y, XYext,40)
