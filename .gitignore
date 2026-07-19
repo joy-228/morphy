@@ -11,6 +11,8 @@ sep/
 statmorph-lsst/
 statmorph/
 
+calc_sfr.py
+
 *.pdf
 *.txt
 *.csv
