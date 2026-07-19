@@ -8,18 +8,19 @@ import scipy.stats as sts
 from sklearn.neighbors import KernelDensity
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-def hess_arr(x_val,y_val,xy_ext,nbins):
+plt.style.use('./presentation.mplstyle')
+
+def hess_arr(x_val,y_val,xy_ext,nbins,z_val=None):
     x_val = (x_val - xy_ext[0])/(xy_ext[1]-xy_ext[0])
     y_val = (y_val - xy_ext[2])/(xy_ext[3]-xy_ext[2])
     dz=1.0/nbins
-    
     
     xx,yy=np.meshgrid(np.arange(dz,1+dz,dz),np.arange(dz,1+2*dz,dz))
     xy_sample = np.vstack([yy[:-1].ravel(), xx[:-1].ravel()]).T
     xy_train  = np.vstack([y_val,x_val]).T
 
     kde_skl = KernelDensity(kernel='gaussian', bandwidth=0.08)
-    kde_skl.fit(xy_train)
+    kde_skl.fit(xy_train,sample_weights=z_val)
     hss_est = np.exp(np.reshape(kde_skl.score_samples(xy_sample),(nbins,nbins)))
     #hss_est = hss_est/((xy_ext[3] - xy_ext[2])*(xy_ext[1] - xy_ext[0]))
     hss_est = hss_est/np.sum(hss_est)
@@ -31,7 +32,7 @@ def hess_arr(x_val,y_val,xy_ext,nbins):
 def hist_2d_marg_axes(Xlabel,Ylabel,XYext):
         left, width = 0.175, 0.65
         bottom, height = 0.1, 0.65
-        spacing = 0.0
+        spacing = 0.01
     
         rect_scatter = [left, bottom, width, height]
         rect_histx = [left, bottom + height + spacing, width, 0.25]
@@ -58,14 +59,14 @@ def marg_hist_1d(AXIS,W,Wext,ORIEN='horizontal',COL='black'):
         kde_1D = KernelDensity(kernel='gaussian', bandwidth=0.1*(Wext[1]-Wext[0])).fit(W.values[:, np.newaxis])
         Wkde_1D = np.exp(kde_1D.score_samples(Wbins1[:, np.newaxis]))
         if ORIEN=='horizontal': 
-            AXIS.plot(Wbins1,Wkde_1D/np.sum(Wkde_1D),color=COL,lw=3,alpha=0.4)
+            AXIS.plot(Wbins1,Wkde_1D/np.sum(Wkde_1D),color=COL,lw=3)
             AXIS.tick_params(axis='y', labelleft=False)
         elif ORIEN=='vertical': 
-            AXIS.plot(Wkde_1D/np.sum(Wkde_1D),Wbins1,color=COL,lw=3,alpha=0.4)
+            AXIS.plot(Wkde_1D/np.sum(Wkde_1D),Wbins1,color=COL,lw=3)
             AXIS.tick_params(axis='x', labelbottom=False)
 
     
-def cmap_hists(FIG,X,Y,LAYER,XYext,Xlabel,Ylabel,CMAP,Z=None,Zext=None,Zlabel=None):
+def cmap_hists(FIG,X,Y,XYext,CMAP,Z=None,Zext=None,Zlabel=None):
         Xval = (X - XYext[0])/(XYext[1]-XYext[0])
         Yval = (Y - XYext[2])/(XYext[3]-XYext[2])
         UV = np.linspace(0,1,20)
@@ -74,20 +75,20 @@ def cmap_hists(FIG,X,Y,LAYER,XYext,Xlabel,Ylabel,CMAP,Z=None,Zext=None,Zlabel=No
     
         #ax_scatter.scatter(X,Y,alpha=0.6,s=40,c=Z,cmap=mcm.coolwarm,vmin=Zbins[0],vmax=Zbins[-1])
         ret = sts.binned_statistic_2d(Xval, Yval, Z, statistic='median', bins=[UV,UV])
-        im = ax[0].imshow(np.transpose(ret.statistic),cmap=CMAP,aspect='auto',extent =XYext,origin='lower',interpolation='gaussian',vmin=Zext[0],vmax=Zext[1],alpha=max(0.2,LAYER))
+        im = ax[0].imshow(np.transpose(ret.statistic),cmap=CMAP,aspect='auto',extent =XYext,origin='lower',interpolation='gaussian',vmin=Zext[0],vmax=Zext[1])
 
         marg_hist_1d(ax[1],X,XYext[:2])
         marg_hist_1d(ax[2],Y,XYext[2:],ORIEN='vertical')
 
-        if LAYER>0:
-            H = hess_arr(X, Y, XYext,40)
-            CS = ax[0].contour(H,lw=6,extent = XYext,origin='lower',colors='black')
-            ax[0].clabel(CS, fontsize=14)
 
-            divider = make_axes_locatable(ax[2])
-            cax = divider.append_axes('right', size='10%', pad=0.0)
-            cbar = FIG.colorbar(im, cax=cax, orientation='vertical')
-            cbar.set_label(Zlabel, size=28) 
+        H = hess_arr(X, Y, XYext,40)
+        CS = ax[0].contour(H,lw=8,extent = XYext,origin='lower',colors='black')
+        ax[0].clabel(CS, fontsize=18)
+
+        divider = make_axes_locatable(ax[2])
+        cax = divider.append_axes('right', size='10%', pad=0.15)
+        cbar = FIG.colorbar(im, cax=cax, orientation='vertical')
+        cbar.set_label(Zlabel, size=28) 
 
 def scatter_hists(X,Y,Xbins,Ybins,Xlabel,Ylabel,Z=None,Zbins=None):
         fig = hist_2d_marg_axes(Xlabel,Ylabel,XYext)
