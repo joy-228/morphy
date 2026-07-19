@@ -16,3 +16,4 @@ statmorph/
 *.csv
 *.fits
 *.npy
+*.ipynb
